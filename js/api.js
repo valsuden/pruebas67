@@ -7,7 +7,7 @@
     // =========================================================================
     // 1. URL DEL SERVIDOR — Obtenida de CONFIG si está disponible
     // =========================================================================
-    window.leaderboardAPI = (window.CONFIG && window.CONFIG.API_URL) || "https://script.google.com/macros/s/AKfycbxPdMN-iYGaD_ueL5lW5Ca0mCzXe4Dmzm1SjVxgnDskrm_GlPI_DZErIid40xpNxbLHOg/exec";
+    window.leaderboardAPI = (window.CONFIG && window.CONFIG.API_URL) || "https://script.google.com/macros/s/AKfycbwaMPSGNLt_O6wrVPyrRCYncqah78qWaq1Z4jFoyin_ve0LjcC3ughzEzlPDAw4RfHUVg/exec";
 
     // =========================================================================
     // 2. CÓDIGOS PROMOCIONALES PREDETERMINADOS
@@ -17,8 +17,19 @@
     var _initCustomCodes = [];
     try {
         var raw = localStorage.getItem('tom_cc_data');
-        if (raw) _initCustomCodes = JSON.parse(atob(raw));
-    } catch (e) { }
+        if (raw) {
+            try {
+                _initCustomCodes = JSON.parse(atob(raw));
+            } catch (e) {
+                console.warn("⚠️ Datos corruptos en tom_cc_data. Reiniciando.");
+                localStorage.removeItem('tom_cc_data');
+                _initCustomCodes = [];
+            }
+        }
+    } catch (e) {
+        console.warn("⚠️ Error al leer tom_cc_data:", e);
+        _initCustomCodes = [];
+    }
     window.CODES_DATA = _defaultCodes.concat(_initCustomCodes);
 
     // =========================================================================
@@ -90,7 +101,11 @@
     };
 
     function _saveProfilePending(name, profileObj) {
-        localStorage.setItem('pendingProfileSync', JSON.stringify({ name: name, profile: profileObj }));
+        try {
+            localStorage.setItem('pendingProfileSync', JSON.stringify({ name: name, profile: profileObj }));
+        } catch (e) {
+            console.warn("⚠️ No se pudo guardar pendingProfileSync:", e);
+        }
         console.warn('Leaderboard: sincronización pendiente para el próximo intento.');
     }
 
@@ -105,6 +120,7 @@
             window.syncProfile(data.name, data.profile);
         } catch (e) {
             console.error('Error en reintento:', e);
+            localStorage.removeItem('pendingProfileSync');
         }
     };
 
@@ -148,7 +164,6 @@
                     ? '<br><span style="color:#ff9900;">⚠️ El admin debe ejecutar <b>setupSheets()</b> en Google Apps Script para crear las hojas.</span>'
                     : '';
                 list.innerHTML = '<p style="color:#ffcc00;">⚠️ Error del servidor: "' + errMsg + '".' + extraHint + '</p>';
-                // Auto-retry after 5 seconds in case sheets are being created
                 if (isNoSheet) {
                     setTimeout(function () {
                         if (list.innerHTML.includes('setupSheets')) {
@@ -185,7 +200,6 @@
                 var medal = medals[i] || '';
                 var rowClass = isTop1 ? 'lb-global-row top1-row' : 'lb-global-row';
                 var nameClass = isTop1 ? 'lb-global-name lb-king-name' : 'lb-global-name';
-                // Try to get banner from server data first, fallback to local storage
                 var localU = typeof Storage !== 'undefined' ? Storage.getUser(r.name) : null;
                 var bannerId = r.banner || (localU ? localU.equippedBanner : null);
 
@@ -326,7 +340,7 @@
             try {
                 var rawCC = localStorage.getItem('tom_cc_data');
                 if (rawCC) localCustom = JSON.parse(atob(rawCC));
-            } catch (e) { }
+            } catch (e) { localCustom = []; }
             var allCustom = localCustom.concat(data.codes);
             var uniqueCustom = [];
             var seen = {};
@@ -346,23 +360,11 @@
     }, 1500);
 
     // =========================================================================
-    // =========================================================================
     // 11. SINCRONIZACIÓN DE PERFIL ONLINE — Smart Merge
     // =========================================================================
 
-    /**
-     * Deep-merge two profile objects on the client side.
-     * - Numbers: take the max.
-     * - Arrays: union (de-duplicate).
-     * - runeQuantities: take max per rune.
-     * - cheatFlags: concat + de-duplicate by id.
-     * - settings: prefer local (device-specific settings).
-     * - lastSaved: use the largest timestamp to detect the "winner".
-     */
     function _clientDeepMerge(local, online, onlineIsNewer) {
         var result = {};
-
-        // Union of all keys from both sides
         var allKeys = Object.keys(Object.assign({}, local, online));
 
         allKeys.forEach(function (key) {
@@ -370,7 +372,6 @@
             var ov = online[key];
 
             if (key === 'settings') {
-                // Settings are device-specific; prefer local
                 result[key] = Object.assign({}, ov || {}, lv || {});
             } else if (key === 'lastSaved') {
                 result[key] = Math.max(parseInt(lv) || 0, parseInt(ov) || 0);
@@ -408,7 +409,6 @@
             } else if (typeof ov === 'object' && ov !== null && typeof lv === 'object' && lv !== null) {
                 result[key] = _clientDeepMerge(lv, ov, onlineIsNewer);
             } else {
-                // Scalars: prefer the value that is not null/undefined
                 result[key] = (lv !== undefined && lv !== null) ? lv : ov;
             }
         });
@@ -422,7 +422,6 @@
             var rawProfile = data.profile;
             var onlineData;
 
-            // The server sends plain JSON (not base64 anymore), but support both
             try {
                 onlineData = JSON.parse(rawProfile);
             } catch (_) {
@@ -435,41 +434,32 @@
 
             var localData = Users._getRaw ? Users._getRaw() : (Users.data || {});
 
-            // Conflict resolution strategy:
-            // If both sides have lastSaved, the most recent wins on scalar fields.
-            // Arrays and quantities are always unioned / maxed.
             var localSaved = parseInt(localData.lastSaved) || 0;
             var onlineSaved = parseInt(onlineData.lastSaved) || 0;
 
             var merged;
             if (localSaved === 0 && onlineSaved > 0) {
-                // Fresh local install — take cloud data wholesale, keep local settings
                 merged = Object.assign({}, onlineData, { settings: localData.settings || onlineData.settings || {} });
             } else {
                 var onlineIsNewer = onlineSaved > localSaved;
                 merged = _clientDeepMerge(localData, onlineData, onlineIsNewer);
             }
 
-            // Safety caps
             merged.coins = Math.min(3000, Math.max(0, parseInt(merged.coins) || 0));
             merged.highScore = Math.min(3000, Math.max(0, parseInt(merged.highScore) || 0));
 
-            // Apply merged data back through the proxy
             if (typeof Users._createSecureProxy === 'function') {
                 Users.data = Users._createSecureProxy(merged, name);
             } else {
                 Users.data = merged;
             }
 
-            // Persist locally (but don't re-trigger cloud sync)
             if (typeof Storage !== 'undefined' && Storage._saveAll) {
                 Storage.saveUser(name, merged);
             }
 
-            // Refresh the entire UI
             if (typeof Users.updateUI === 'function') Users.updateUI();
 
-            // Apply synced settings
             if (merged.settings && typeof window.applySettings === 'function') {
                 window.applySettings(merged.settings);
             }
@@ -499,7 +489,6 @@
 
         type = type || 'desconocido';
 
-        // Delegate to the unified cheat reporter (sends to Tramposos sheet)
         if (typeof window.reportCheat === 'function') {
             window.reportCheat({
                 cheatType: 'console_tampering',
@@ -520,7 +509,6 @@
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         } else {
-            // Fallback sin crypto.subtle para protocolo local file:// sin exponer la contraseña en texto plano
             var hash = 5381;
             for (var i = 0; i < message.length; i++) {
                 hash = ((hash << 5) + hash) + message.charCodeAt(i);
@@ -600,12 +588,12 @@
         try {
             var rawCC = localStorage.getItem('tom_cc_data');
             if (rawCC) customCodes = JSON.parse(atob(rawCC));
-        } catch (e) { }
+        } catch (e) { customCodes = []; }
         customCodes = customCodes.filter(function (c) { return c.code !== name; });
         customCodes.push(newCodeObj);
         try {
             localStorage.setItem('tom_cc_data', btoa(JSON.stringify(customCodes)));
-        } catch (e) { console.error("❌ Error guardando código.", e); return; }
+        } catch (e) { console.error("❌ Error guardando código.", e); }
         window.CODES_DATA = _defaultCodes.concat(customCodes);
 
         var addCbName = 'addCodeCb_' + Math.round(Math.random() * 999999);
@@ -722,7 +710,7 @@
                         if (el) el.remove();
                         if (resp && resp.success) {
                             _adminOk('✅ ¡Nota guardada correctamente!');
-                            if (typeof NotesSystem !== 'undefined') NotesSystem.cache = null; // Invalidate cache
+                            if (typeof NotesSystem !== 'undefined') NotesSystem.cache = null;
                         } else {
                             _adminOk('❌ Error guardando nota: ' + (resp ? resp.error : ''));
                         }
@@ -846,7 +834,6 @@
             backdrop.addEventListener('click', function (e) { if (e.target === backdrop) window.closeLeaderboardModal(); });
         }
 
-        // Title double click to unlock admin
         var title = document.querySelector('h1');
         if (title) {
             title.style.cursor = 'pointer';
@@ -856,7 +843,6 @@
             });
         }
 
-        // Keyboard shortcut: Ctrl + Shift + A to trigger admin login prompt
         document.addEventListener('keydown', function (e) {
             if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
                 e.preventDefault();

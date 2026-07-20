@@ -13,13 +13,13 @@ const Shop = {
 
     init() {
         this.loadStock();
-        setInterval(() => this.checkRefresh(), 60000); // Check every minute
+        setInterval(() => this.checkRefresh(), 60000);
     },
 
     loadStock() {
         try {
             const data = JSON.parse(localStorage.getItem('shopRuneStock'));
-            if (data && Date.now() - data.time < 600000) { // 10 minutes
+            if (data && Date.now() - data.time < 600000) {
                 this.currentRuneStock = data.stock;
                 this.consecutiveMisses = data.misses || 0;
                 this.lastRefreshTime = data.time;
@@ -49,7 +49,6 @@ const Shop = {
         this.currentRuneStock = [];
         let hasLegendaryOrMythic = false;
 
-        // Guarantee check
         if (this.consecutiveMisses >= 3) {
             let highTierRunes = availableRunes.filter(r => r.rarity === 'Legendary' || r.rarity === 'Mythic');
             if (highTierRunes.length > 0) {
@@ -61,7 +60,6 @@ const Shop = {
             }
         }
 
-        // Fill remaining slots
         for (let i = 0; i < stockSize; i++) {
             let randomRune = availableRunes[Math.floor(Math.random() * availableRunes.length)];
             this.currentRuneStock.push(randomRune);
@@ -162,7 +160,6 @@ const Shop = {
 
         if (!this.currentRuneStock || this.currentRuneStock.length === 0) return;
 
-        // Render stock items
         this.currentRuneStock.forEach((r, idx) => {
             const rar = typeof getRuneRarity === 'function' ? getRuneRarity(r.rarity) : null;
             const color = rar ? rar.color : '#fff';
@@ -212,7 +209,6 @@ const Shop = {
             runesGrid.appendChild(card);
         });
 
-        // Add Secret Rune (always out of stock)
         const secretRune = typeof RUNES !== 'undefined' ? RUNES.find(r => r.id === 'rune_two_time') : null;
         if (secretRune) {
             const rar = typeof getRuneRarity === 'function' ? getRuneRarity(secretRune.rarity) : null;
@@ -278,7 +274,6 @@ const Shop = {
             runesGrid.appendChild(card);
         }
 
-        // Add timer info
         if (this.countdownInterval) clearInterval(this.countdownInterval);
 
         const timerLabel = document.createElement('div');
@@ -319,7 +314,6 @@ const Shop = {
         if (!r) return;
         if (Users.buyRune && Users.buyRune(id)) {
             toast(`¡Runa ${r.name} comprada!`, 'success');
-            // Remove from stock once bought
             this.currentRuneStock.splice(stockIndex, 1);
             localStorage.setItem('shopRuneStock', JSON.stringify({
                 stock: this.currentRuneStock,
@@ -343,7 +337,6 @@ const Shop = {
             return;
         }
 
-        // Rate limiting: max 5 attempts per minute
         const now = Date.now();
         let rateLimit = { attempts: 0, last: 0 };
         try {
@@ -394,7 +387,6 @@ const Shop = {
             }
 
             if (!data.success) {
-                // GAS not redeployed yet — show specific message
                 if (data.error && (data.error.includes('Acci') || data.error.includes('no reconocida'))) {
                     feedback.textContent = '⚠️ EL SERVIDOR NO ESTÁ ACTUALIZADO. PIDE AL ADMIN QUE REPUBLIQUE EL SCRIPT.';
                     feedback.style.color = '#ffaa00';
@@ -405,7 +397,6 @@ const Shop = {
                 return;
             }
 
-            // Server confirmed — apply rewards
             const prizeCoins = data.coins || 0;
             if (prizeCoins > 0) Users.addCoins(prizeCoins);
 
@@ -416,7 +407,6 @@ const Shop = {
                 Users.data.runeQuantities[data.runeId] = (Users.data.runeQuantities[data.runeId] || 0) + 1;
             }
 
-            // Save redemption hash locally to show as "already redeemed" even before next sync
             Users.data.redeemedCodes = Users.data.redeemedCodes || [];
             crypto.subtle.digest('SHA-256', new TextEncoder().encode(enteredCode)).then(buffer => {
                 const hashHex = Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -601,7 +591,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Click toggles submenu class to support mobile touch devices
     var tabBannersBtn = document.getElementById('tab-banners');
     if (tabBannersBtn) {
         tabBannersBtn.addEventListener('click', function (e) {
@@ -613,7 +602,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Close submenu when clicking anywhere outside
     document.addEventListener('click', function () {
         var wrapper = document.querySelector('.shop-tab-wrapper');
         if (wrapper) {
@@ -621,7 +609,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Lobby music reloader when returning to menu
     var returnMenuBtn = document.getElementById('return-menu-btn');
     if (returnMenuBtn) {
         returnMenuBtn.addEventListener('click', function () {
@@ -633,5 +620,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 300);
         });
+    }
+});
     }
 });

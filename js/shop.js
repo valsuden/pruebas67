@@ -622,5 +622,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-    }
-});

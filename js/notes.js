@@ -10,20 +10,51 @@
 const NotesSystem = {
     cache: null,
     isOpen: false,
+    isInitialized: false,
 
     init: function () {
+        // Evitar inicializar más de una vez
+        if (this.isInitialized) return;
+        this.isInitialized = true;
+        
         this.bindEvents();
     },
 
     bindEvents: function () {
         const notesBtn = document.getElementById('btn-notas');
         if (notesBtn) {
-            notesBtn.addEventListener('click', () => this.toggleModal());
+            // Eliminar event listeners anteriores para evitar duplicados
+            const newBtn = notesBtn.cloneNode(true);
+            notesBtn.parentNode.replaceChild(newBtn, notesBtn);
+            
+            newBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evitar propagación
+                this.toggleModal();
+            });
         }
 
         const closeBtn = document.getElementById('notes-close-btn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeModal());
+            const newClose = closeBtn.cloneNode(true);
+            closeBtn.parentNode.replaceChild(newClose, closeBtn);
+            
+            newClose.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.closeModal();
+            });
+        }
+
+        // Cerrar al hacer clic fuera del modal (en el overlay)
+        const overlay = document.getElementById('notes-overlay');
+        if (overlay) {
+            const newOverlay = overlay.cloneNode(true);
+            overlay.parentNode.replaceChild(newOverlay, overlay);
+            
+            newOverlay.addEventListener('click', (e) => {
+                if (e.target === newOverlay) {
+                    this.closeModal();
+                }
+            });
         }
     },
 
@@ -36,6 +67,8 @@ const NotesSystem = {
     },
 
     openModal: function () {
+        if (this.isOpen) return; // Evitar abrir si ya está abierto
+        
         this.isOpen = true;
         const modal = document.getElementById('notes-modal');
         const overlay = document.getElementById('notes-overlay');
@@ -44,7 +77,6 @@ const NotesSystem = {
             modal.style.display = 'flex';
             overlay.style.display = 'block';
 
-            // Trigger animation
             setTimeout(() => {
                 modal.classList.add('open');
                 overlay.classList.add('open');
@@ -55,6 +87,8 @@ const NotesSystem = {
     },
 
     closeModal: function () {
+        if (!this.isOpen) return;
+        
         this.isOpen = false;
         const modal = document.getElementById('notes-modal');
         const overlay = document.getElementById('notes-overlay');
@@ -63,11 +97,10 @@ const NotesSystem = {
             modal.classList.remove('open');
             overlay.classList.remove('open');
 
-            // Wait for animation to finish
             setTimeout(() => {
                 modal.style.display = 'none';
                 overlay.style.display = 'none';
-            }, 300); // 300ms matches css transition
+            }, 300);
         }
     },
 
@@ -75,7 +108,6 @@ const NotesSystem = {
         const container = document.getElementById('notes-list-container');
         if (!container) return;
 
-        // Use cache if available
         if (this.cache !== null) {
             this.renderNotes(this.cache);
             return;
@@ -102,7 +134,6 @@ const NotesSystem = {
                 return;
             }
 
-            // Cache data and render
             this.cache = data.notes || [];
             this.renderNotes(this.cache);
         };
@@ -145,7 +176,6 @@ const NotesSystem = {
             const body = document.createElement('div');
             body.className = 'note-body';
 
-            // Format content by escaping HTML and converting newlines to <br>
             const formattedContent = this.escapeHtml(note.contenido).replace(/\n/g, '<br>');
 
             body.innerHTML = `
@@ -156,7 +186,10 @@ const NotesSystem = {
                 </div>
             `;
 
-            header.addEventListener('click', () => this.toggleCard(card, body));
+            header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleCard(card, body);
+            });
 
             card.appendChild(header);
             card.appendChild(body);
@@ -167,7 +200,6 @@ const NotesSystem = {
     toggleCard: function (card, body) {
         const isExpanded = card.classList.contains('expanded');
 
-        // Close all other cards
         document.querySelectorAll('.note-card.expanded').forEach(c => {
             c.classList.remove('expanded');
         });
@@ -191,7 +223,11 @@ const NotesSystem = {
     }
 };
 
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+// Inicializar cuando el DOM esté listo (solo una vez)
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
     NotesSystem.init();
-});
+} else {
+    document.addEventListener('DOMContentLoaded', () => {
+        NotesSystem.init();
+    });
+}

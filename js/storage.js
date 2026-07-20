@@ -26,7 +26,6 @@ const Storage = {
             if (signature !== expectedSig) {
                 console.warn("⚠️ SEGURIDAD: Modificación no autorizada detectada en el almacenamiento local. Restableciendo datos.");
 
-                // Report to server BEFORE wiping
                 if (typeof window.reportCheat === 'function') {
                     window.reportCheat({
                         cheatType:    'localstorage_tampering',
@@ -41,8 +40,18 @@ const Storage = {
                 return {};
             }
 
-            return JSON.parse(raw);
-        } catch (e) { return {}; }
+            try {
+                return JSON.parse(raw);
+            } catch (parseError) {
+                console.warn("⚠️ Error al parsear tom_users. Reiniciando datos.");
+                localStorage.removeItem('tom_users');
+                localStorage.removeItem('tom_users_sig');
+                return {};
+            }
+        } catch (e) { 
+            console.warn("⚠️ Error en _getAll:", e);
+            return {}; 
+        }
     },
 
     _saveAll(data) {
@@ -61,9 +70,13 @@ const Storage = {
             }
         }
 
-        const raw = JSON.stringify(data);
-        localStorage.setItem('tom_users', raw);
-        localStorage.setItem('tom_users_sig', this._hash(raw + this.salt));
+        try {
+            const raw = JSON.stringify(data);
+            localStorage.setItem('tom_users', raw);
+            localStorage.setItem('tom_users_sig', this._hash(raw + this.salt));
+        } catch (e) {
+            console.warn("⚠️ Error al guardar datos en localStorage:", e);
+        }
     },
 
     getUser(name) {

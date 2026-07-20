@@ -1,0 +1,13 @@
+{
+  "name": "works-game",
+  "version": "1.0.0",
+  "description": "Local development server for the Works Game",
+  "scripts": {
+    "dev": "http-server -a 0.0.0.0 -p 8080 -c-1"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
